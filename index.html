@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eurobrake Seminer Seçimi - Yeni Arayüz</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Tailwind gray-100 */
+        }
+        .time-slot-group {
+            margin-bottom: 2.5rem; /* mb-10 */
+            padding-bottom: 1.5rem; /* pb-6 */
+            border-bottom: 2px solid #e5e7eb; /* border-b-2 border-gray-200 */
+        }
+        .time-slot-group:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        .session-column {
+            background-color: white;
+            padding: 1.5rem; /* p-6 */
+            border-radius: 0.5rem; /* rounded-lg */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); /* shadow-md */
+            margin-bottom: 1rem; /* Added for spacing if columns wrap */
+        }
+        .presentation-card {
+            background-color: #f9fafb; /* Tailwind gray-50 */
+            border: 1px solid #e5e7eb; /* Tailwind gray-200 */
+            padding: 1rem; /* p-4 */
+            border-radius: 0.375rem; /* rounded-md */
+            margin-bottom: 0.75rem; /* mb-3 */
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .presentation-card:hover {
+            background-color: #eff6ff; /* Tailwind blue-50 */
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); /* shadow-sm */
+        }
+        .presentation-card.selected-by-someone {
+            border-left: 4px solid #fbbf24; /* Tailwind amber-400 */
+            background-color: #fffbeb; /* Tailwind amber-50 */
+        }
+        .modal {
+            background-color: rgba(0, 0, 0, 0.5);
+            transition: opacity 0.3s ease;
+        }
+        .modal-content {
+            transition: transform 0.3s ease;
+        }
+        .participant-summary {
+            background-color: white;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+            margin-top: 2rem;
+        }
+        /* Katılımcı özeti için yeni stiller */
+        .summary-participant-block {
+            margin-bottom: 1.5rem; /* mb-6 */
+        }
+        .summary-participant-block:last-child {
+            margin-bottom: 0;
+        }
+        .summary-participant-block ul {
+            list-style-type: disc;
+            margin-left: 1.5rem; /* ml-6 */
+        }
+        .summary-participant-block li {
+            margin-bottom: 0.25rem; /* mb-1 */
+        }
+        .salon-badge {
+            display: inline-block;
+            padding: 0.125rem 0.5rem; /* py-0.5 px-2 */
+            border-radius: 0.25rem; /* rounded-md */
+            font-size: 0.75rem; /* text-xs */
+            font-weight: 500; /* font-medium */
+            margin-left: 0.5rem; /* ml-2 */
+        }
+        .salon-a { background-color: #fee2e2; color: #b91c1c; } /* Red */
+        .salon-b { background-color: #dbeafe; color: #1e40af; } /* Blue */
+        .salon-c { background-color: #d1fae5; color: #065f46; } /* Green */
+
+        .action-buttons-container {
+            margin-top: 2.5rem; /* mt-10 */
+            padding: 1.5rem; /* p-6 */
+            background-color: white;
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+            text-align: center;
+        }
+        .action-button {
+            padding: 0.75rem 1.5rem; /* py-3 px-6 */
+            border-radius: 0.375rem; /* rounded-md */
+            font-weight: 600; /* font-semibold */
+            transition: background-color 0.2s ease-in-out;
+            margin: 0 0.5rem; /* mx-2 */
+        }
+        #saveNotification {
+            margin-top: 1rem; /* mt-4 */
+            padding: 0.75rem; /* p-3 */
+            border-radius: 0.375rem; /* rounded-md */
+            background-color: #d1fae5; /* Tailwind green-100 */
+            color: #065f46; /* Tailwind green-700 */
+            font-size: 0.875rem; /* text-sm */
+            display: none; /* Başlangıçta gizli */
+        }
+
+        /* PDF Çıktısı için Stiller */
+        @media print {
+            body {
+                font-size: 10pt; /* Yazdırma için temel font boyutu */
+                background-color: white !important; /* Yazdırma için beyaz arka plan */
+                -webkit-print-color-adjust: exact !important; /* Chrome/Safari'de renklerin yazdırılmasını zorla */
+                print-color-adjust: exact !important; /* Standart renklerin yazdırılmasını zorla */
+            }
+            header, /* Sayfa başlığını PDF'te gizle */
+            .action-buttons-container, /* Butonları PDF'te gizle */
+            #participantModal, /* Modalı PDF'te gizle */
+            #saveNotification { /* Kaydetme bildirimini PDF'te gizle */
+                display: none !important;
+            }
+            .time-slot-group, .session-column, .presentation-card {
+                page-break-inside: avoid !important; /* Öğelerin sayfa ortasında bölünmesini engellemeye çalış */
+            }
+            .participant-summary {
+                margin-top: 1rem !important;
+                box-shadow: none !important;
+                border: 1px solid #cccccc !important;
+            }
+            .session-column {
+                border: 1px solid #eeeeee !important;
+                box-shadow: none !important;
+            }
+            .presentation-card {
+                border: 1px solid #f0f0f0 !important;
+            }
+            /* Metin renklerini yazdırma için siyah yap (önemli olanları) */
+            h1, h2, h3, h4, p, span, strong, li, div, button {
+                color: black !important;
+            }
+            /* Arka plan renklerini kaldır (önemli olanları) */
+            .session-column, .presentation-card, .participant-summary, body,
+            .salon-a, .salon-b, .salon-c { /* Salon etiketlerinin arka planını da beyaz yap */
+                background-color: white !important;
+            }
+            .salon-badge { /* Salon etiketlerini basit bir çerçeve ile göster */
+                border: 1px solid #555555 !important;
+                color: black !important; /* Etiket içindeki metin rengi */
+                padding: 1px 3px !important;
+            }
+             /* Tailwind renklerini geçersiz kıl */
+            .text-indigo-700, .text-gray-600, .text-gray-700, .text-gray-800, .text-amber-700, .text-indigo-600, .text-gray-500,
+            .bg-green-500, .bg-blue-500, .bg-gray-300, .bg-indigo-600, .bg-green-100, .bg-amber-50, .bg-blue-50, .bg-gray-50
+             {
+                color: black !important;
+                background-color: white !important;
+            }
+            .border-gray-200, .border-b-2 {
+                 border-color: #eeeeee !important;
+            }
+            .shadow-md, .shadow-lg, .shadow-xl {
+                box-shadow: none !important;
+            }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div class="container mx-auto max-w-full">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl md:text-4xl font-bold text-indigo-700">Eurobrake 2025 Sunum Seçimi</h1>
+            <p class="text-gray-600 mt-2">Sunumlara tıklayarak katılımcı atayabilirsiniz.</p>
+        </header>
+
+        <div id="scheduleContainer">
+            </div>
+
+        <div id="participantSummarySection" class="participant-summary">
+            <h2 class="text-2xl font-semibold text-indigo-700 mb-4">Katılımcı Özeti</h2>
+            <div id="summaryContent" class="space-y-4">
+                <p class="text-gray-500">Henüz bir atama yapılmadı.</p>
+            </div>
+        </div>
+
+        <div class="action-buttons-container">
+            <button id="saveSelectionsButton" class="action-button bg-green-500 hover:bg-green-600 text-white">
+                Değişiklikleri Kaydet
+            </button>
+            <button id="exportPdfButton" class="action-button bg-blue-500 hover:bg-blue-600 text-white">
+                PDF Olarak Çıktı Al
+            </button>
+            <div id="saveNotification">
+                Seçimleriniz kaydedildi (Tarayıcı konsoluna loglandı). Sayfayı yenilerseniz kaybolacaktır.
+            </div>
+        </div>
+
+    </div>
+
+    <div id="participantModal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4 hidden opacity-0">
+        <div class="modal-content bg-white p-6 rounded-lg shadow-xl w-full max-w-md transform scale-95">
+            <h3 id="modalTitle" class="text-xl font-semibold mb-4 text-indigo-700">Katılımcı Seç</h3>
+            <p id="modalPresentationInfo" class="text-sm text-gray-600 mb-4"></p>
+            <div id="modalParticipants" class="space-y-2 mb-6">
+                </div>
+            <div class="flex justify-end space-x-3">
+                <button id="cancelButton" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400 transition">İptal</button>
+                <button id="saveButton" class="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition">Kaydet</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Firebase konfigürasyonu
+        const firebaseConfig = {
+            apiKey: "AIzaSyD150j3xjd_Zl5THMk-hBduDGjAV8DfYL0",
+            authDomain: "eurobrake2025.firebaseapp.com",
+            databaseURL: "https://eurobrake2025-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "eurobrake2025",
+            storageBucket: "eurobrake2025.firebasestorage.app",
+            messagingSenderId: "3344605721",
+            appId: "1:3344605721:web:0084a59d338d5b12ecc088"
+        };
+
+        // Firebase'i başlat
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+
+        const participants = ["Barış", "Can", "Cem"];
+        let currentEditingPresentationId = null;
+        let sessionCounter = 0; 
+
+        const conferenceData = [
+            {
+                timeSlot: "3 June 2025 11:20-13:10 CET",
+                technicalSessions: [ 
+                    { 
+                        chair: "Dr.-Ing. Septimiu Popa, Mercedes-AMG",
+                        coChair: "Dr.-Ing. Phillip Utsch, HPL Technologies GmbH",
+                        presentations: [
+                            { id: "EB2025-EFA-018", title: "Friction Performance and Wear Emissions from a Laser-Clad Brake Rotor in comparison with uncoated Grey Cast Iron", presenter: "Matthew Currie, University of Leeds, United Kingdom" },
+                            { id: "EB2025-TSD-013", title: "Industry 4.0 and 5.0-Ready Process Monitoring for High-Speed Laser Cladding of Brake Discs: A Contribution to Achieving EURO 7 Particulate Matter Goals", presenter: "Dr. Alexander Schwenk, weldmetrix GmbH, Austria" },
+                            { id: "EB2025-COM-026", title: "Cost-benefit-risk examination for the industrialization of coated EU7 brake discs under special consideration of the interaction of the simultaneous product and process development", presenter: "Dr.-Ing. Phillip Utsch, HPL Technologies GmbH, Germany" },
+                            { id: "EB2025-EFA-016", title: "Next generation laser coating for large-scale manufacturing of emission-reduced brake discs", presenter: "Dr.-Ing. Axel Frey, TRUMPF, Germany" },
+                            { id: "EB2025-EFA-022", title: "Navigating Complexity: Unveiling the Power of Life Cycle Assessment in the Automotive Industry", presenter: "Ing. Ruhul Hassan, Brembo N.V., Italy" },
+                        ]
+                    },
+                    { 
+                        chair: "Heinz Bacher, BMW",
+                        coChair: "Tayfun Hekimoglu",
+                        presentations: [
+                            { id: "EB2025-TSD-023", title: "Assessing Real-Driving Emissions Brake Wear Particle Sampling Efficiency in Test Bed and Chassis Dynamometer Settings", presenter: "Dipl.-Ing. Michael Peter Huber, AVL, Austria" },
+                            { id: "EB2025-TSD-003", title: "State of the art in brake particle emissions from EV passenger cars", presenter: "Dr. Hiroyuki Hagino, JARI (Japan Automobile Research Institute), Japan" },
+                            { id: "EB2025-BSY-011", title: "Evaluating the velocity field in the wake of a brake caliper with optical measurement technique (PIV, Particle Image Velocimetry)", presenter: "Ing. Robert Knopff, Ostfalia HaW Wolfenbüttel, Germany" },
+                            { id: "EB2025-TSD-027", title: "High speed fade and brake particle emission tested with and without regenerative braking effects", presenter: "Prof. Dr. Xueyuan Nie, Univ. of Windsor, Canada" },
+                            { id: "EB2025-TSD-011", title: "Analysis of possible brake emission test for HDVs", presenter: "Prof. Dr.-Ing. Stefan Hausberger, TU Graz, Austria" },
+                        ]
+                    },
+                    { 
+                        chair: "Dr Michele Vianello, AP Racing",
+                        coChair: "Peter Fischer, Technische Universität Graz",
+                        presentations: [
+                            { id: "EB2025-BSY-012", title: "Regenerative Braking strategies in EVs: the balance between efficiency, stability, and right-sizing", presenter: "Hector Garces, Applus Idiada, Spain" },
+                            { id: "EB2025-COM-018", title: "Research and testing of a multi-part brake disk made of corrosion-resistant steel produced by a forming process", presenter: "Falko Wagner, Technische Universität Chemnitz, Germany" },
+                            { id: "EB2025-COM-021", title: "Effect of Fe, Mn, and Cr Impurities on the Corrosion Resistance and Anodizability of Aluminum Alloys for Brake System Applications", presenter: "Dr. Federico Bertasi, Brembo N.V., Italy" },
+                            { id: "EB2025-BSY-006", title: "An Investigation into the Effect of Steel Fiber Reinforcement on the Tribological Properties of Copper-Free Brake Pads.", presenter: "Dr. Ali Partovinia, Shahid Beheshti University, Iran (Islamic Republic of)" },
+                            { id: "EB2025-COM-008", title: "High temperature brake torque variation study on friction material coupled with TiC based hard coated disc", presenter: "Dr. Dario Caldarola, ITT friction, Italy" }
+                        ]
+                    }
+                ]
+            },
+            {
+                timeSlot: "3 June 2025 15:30-17:25 CET",
+                technicalSessions: [ 
+                    { 
+                        chair: "Dr.-Ing. Septimiu Popa, Mercedes-AMG",
+                        coChair: "Xueyuan Nie, University of Windsor",
+                        presentations: [
+                            { id: "EB2025-COM-010", title: "Advancing Single-Layer Coating Solutions: MetcoBrake Single-layer Gen2 for High-Load Brake Disc Applications", presenter: "Dr.-Ing. Hossein Najafi, Oerlikon, Switzerland" },
+                            { id: "EB2025-COM-011", title: "Roller burnishing of hard-coated brake discs: Economic and technological benefits for the manufacturing process", presenter: "Dipl.-Ing. Christian Henk, HEGENSCHEIDT-MFD GmbH, Germany" },
+                            { id: "EB2025-CMV-007", title: "Assessing brake wear particle emissions and performance of FNC-Smart ONC GCI Rotors for Euro 7 Compliance", presenter: "Dr. Saadia Nousir, Nitrex Metal Inc., Canada" },
+                            { id: "EB2025-COM-024", title: "The impact of corrosion on the particle wear emissions generated from different brake rotor surfaces", presenter: "Ishmaeel Ghouri, University of Leeds, United Kingdom" },
+                            { id: "EB2025-COM-002", title: "Cold-Sprayed Single Layer Brake Disc Coating For Euro 7 Regulation", presenter: "Dr.-Ing. Sascha Benrhardt, Impact Innovations GmbH, Germany" }, 
+                        ]
+                    },
+                    { 
+                        chair: "K. Mike Lee, Sangsin Brake",
+                        coChair: "Roberto Erotavo, Automobili Pininfarina GmbH",
+                        presentations: [
+                            { id: "EB2025-TSD-016", title: "Enhancing Vehicle Roadworthiness Inspections: Integrating Brake Pressure Manipulation and Deep Learning for Advanced Brake Performance Analysis of Hydraulically-Braked Vehicles", presenter: "Marina Dolokov, FSD Fahrzeugsystemdaten GmbH, Germany" },
+                            { id: "EB2025-TSD-008", title: "Advanced aerothermal testing for performance prediction based on Lamborghini car aerodynamics and CFD simulations", presenter: "Daniel Angel Palomino Solis, Brembo SGL Carbon Ceramic Brakes S.p.A., Italy" },
+                            { id: "EB2025-MDS-011", title: "Thermal Modelling of a Drum Brake: A Multi-Point-Mass Approach", presenter: "Dipl.-Ing. Daniel Heuberger, University of Technology Graz - Institute of Automotive Engineering, Austria" },
+                            { id: "EB2025-MDS-013", title: "One-dimensional finite difference models for the thermal study of tread and disc brake in train braking", presenter: "Ing. Riccardo Siniscalchi, University of Rome Tor Vergata, Italy" },
+                            { id: "EB2025-BSY-008", title: "Design and preliminary experimental tests of an innovative test bench for zero emission braking system", presenter: "Prof. Dr.-Ing. Massimiliana Carello, Politecnico di Torino, Italy" },
+                        ]
+                    },
+                    { 
+                        chair: "Torsten Treyde, ZF Group",
+                        coChair: "Mike Lee, Sangsin Brake",
+                        presentations: [
+                            { id: "EB2025-TSD-006", title: "Elucidation of Stick-slip Phenomenon on Inertia Dynamometer Using Acoustic Emission Sensing", presenter: "Hajime Toyoda, Resonac Copration, Japan" }, 
+                            { id: "EB2025-TSD-028", title: "Overview of New SAE J3211 for Inertia Dynamometer Brake Squeal Test for Vehicles with Regenerative Braking", presenter: "Carlos Agudelo, Link Engineering Co., United States" },
+                            { id: "EB2025-MDS-003", title: "Identifying Critical Operational Conditions Using Statistical Distributions and Complex Eigenvalue Analysis in S-Cam Drum Brakes.", presenter: "Sudharsan Muralidharan, Brakes India Private Limited, India" },
+                            { id: "EB2025-TSD-009", title: "Experimental and Analytical Investigation on Automotive Disc Brake Hot Judder Studied as a Self-Excited Vibration with Time Delay", presenter: "Prof. Dr. Takashi Nakae, Oita University/Faculty of Science and Technology, Japan" },
+                            { id: "EB2025-RWB-002", title: "Development of a multi-degree-of-freedom rigid-elastic multibody simulation model of a railway bogie and brake system for estimating friction-induced vibration", presenter: "Kaoru Takehama, Institute of Structural Durability and Railway Technology, Graz University of Technology, Austria" }
+                        ]
+                    }
+                ]
+            },
+            {
+                timeSlot: "4 June 2025 13:20-15:10 CET",
+                technicalSessions: [ 
+                    { 
+                        chair: "Abdessamed Ramdane, Hitachi Astemo",
+                        coChair: "Paul Linhoff, Continental",
+                        presentations: [
+                            { id: "EB2025-BSY-003", title: "Pioneering the Future: Electro-Mechanical Brakes and the Challenges of New Emissions Regulations", presenter: "Patricio Barbale, S&P Global Mobility, Italy" },
+                            { id: "EB2025-MDS-016", title: "A complete forming processes simulation methodology for mechatronic braking component.", presenter: "Nicolás Escribano, Ing., Instituto tecnológico de Aragón (ITA), Spain" },
+                            { id: "EB2025-BSY-002", title: "Considerations for brake drag torque reduction", presenter: "Takumi Inoue, ADVICS CO., LTD, Japan" },
+                            { id: "EB2025-COM-028", title: "Review on Sustainable Strategies for Improving Electric Vehicle Brake Rotors Wear and Corrosion Resistance - Challenges and Future Direction", presenter: "Dr. Samuel Awe, AUTOMOTIVE COMPONENTS FLOBY AB, Sweden" },
+                            { id: "EB2025-BSY-016", title: "Investigation on control strategies for electromechanical drum brakes and their repercussions on vehicle architecture", presenter: "Missie Aguado Rojas, Astemo, France" },
+                        ]
+                    },
+                    { 
+                        chair: "Agusti Sin, ITT",
+                        coChair: "Frederik Lange, Zeekr",
+                        presentations: [
+                            { id: "EB2025-COM-013", title: "Advancing Solid Lubrication: A Case for Complex Metal Sulfides Compared to Single-Metal Sulfide Blends", presenter: "Dipl.-Ing. Kamal Allahyarli, Frimeco Produktions GmbH, Austria" },
+                            { id: "EB2025-EFA-017", title: "Natural cellulose and wood fibers for brake linings", presenter: "Sascha Galic, J. Rettenmaier + Soehne GmbH + Co KG, Germany" },
+                            { id: "EB2025-COM-016", title: "Exploration of the impact of mineral fibers and calcium silicate on emissions of NAO disc pads using a simplified screening method for particle emissions.", presenter: "Roel Hebben, Lapinus, Netherlands" },
+                            { id: "EB2025-TSD-010", title: "Investigation of Brake Pad Deformation Under Pressure", presenter: "Meechai Sriwiboon, Compact International (1994) Co.,LTD, Thailand" },
+                            { id: "EB2025-COM-027", title: "A New Potassium Hexatitanate", presenter: "Dr. Mario Gerardo Terruzzi, AIS-INTERSOLEX s.r.l., Italy" },
+                        ]
+                    },
+                    { 
+                        chair: "Georg Ostermeyer, TU Braunchsweig",
+                        coChair: "Carlos Agudelo, LINK Engineering",
+                        presentations: [
+                            { id: "EB2025-TSD-029", title: "Practical Implementation of the Proposed UNECE R117 Convoy Method for C1 Tyre Abrasion", presenter: "Dr. Marcel Mathissen, Link Engineering Company GmbH, Germany" },
+                            { id: "EB2025-EFA-020", title: "How effective is the collection of particles for reducing the non-exhaust emission footprint of road transport? An LCA and CBA analysis for EU light-duty vehicles and fleets", presenter: "Nikoletta Batsalia, EMISIA SA, Greece" },
+                            { id: "EB2025-EFA-002", title: "Quantification Challenges and Methodological Advances in Tire Wear Particle Emission Measurements on an Outer Drum Test Bed", presenter: "Dipl.-Ing. Ludwig Schubert, University of Technology Graz - Institute of Automotive Engineering, Austria" },
+                            { id: "EB2025-EFA-011", title: "Methodology for generation, collection and analysis of primary data for tyre airborne emission factors", presenter: "Dr. Dimitrios Kontses, Aristotle University of Thessaloniki, Gree" }, 
+                        ]
+                    }
+                ]
+            },
+            {
+                timeSlot: "4 June 2025 15:30-17:40 CET",
+                technicalSessions: [ 
+                    { 
+                        chair: "Arun Prasath, Cubonic",
+                        coChair: "Fabio Squadrani, IDIADA",
+                        presentations: [
+                            { id: "EB2025-BSY-004", title: "Development of Drum EPB Brake System for Passenger Vehicle", presenter: "Chunsu Kim, Hyundai Mobis, Republic of Korea" },
+                            { id: "EB2025-BSY-001", title: "Development of 2-Piston MoC Brake System for Heavy Duty Pick-up Truck", presenter: "Hyunhwa Hong, Hyundai Mobis, Republic of Korea" },
+                            { id: "EB2025-BSY-007", title: "Simulative potential analysis of brake-by-wire systems for integrated chassis control strategies and software-defined vehicles", presenter: "Dr. Mark Wielitzka, IAV GmbH, Germany" },
+                            { id: "EB2025-BSY-013", title: "Braking performance comparison of hybrid SE-MR drum brake and CE-MR drum brake", presenter: "Dr. Chiranjit Sarkar, Indian Institute of Technology Patna, India" },
+                            { id: "EB2025-COM-017", title: "Carbon ceramic friction couple application on EV", presenter: "Kobe Fang, KBC Corporation Co., Ltd, China" },
+                            { id: "EB2025-EFA-014", title: "Ensuring Consistency in Brake Disk Manufacturing through Comprehensive Powder Cone Characterization and Real-Time Powder Feeding Monitoring", presenter: "Dr. Simone Maffia, Ponticon GmbH, Germany" },
+                        ]
+                    },
+                    { 
+                        chair: "Pietro Durando, ITT",
+                        coChair: "Roel Hebben, Lapinus",
+                        presentations: [
+                            { id: "EB2025-EFA-010", title: "Addition of Al Anodizing Waste in a Commercial Friction Material in an Industrial Symbiosis Perspective", presenter: "Prof. Giovanni Straffelini, University of Trento, Italy" },
+                            { id: "EB2025-EFA-015", title: "Substituting petrochemical phenolic resin for a biobased one: A case study of brake pads for passenger vehicles application.", presenter: "Dr. Roberta Motta Neves, Fras-le SA, Brazil" },
+                            { id: "EB2025-EFA-003", title: "Sustainable graphite for brake pads: opportunities and challenges", presenter: "Dr. Raffaele Gilardi, Imerys Graphite & Carbon, Switzerland" },
+                            { id: "EB2025-EFA-007", title: "Improving thermal stability and frictional performance of brake pad: A study on interactive effects of compression and gas release time", presenter: "Dr. Ali Partovinia, Shahid Beheshti University, Iran (Islamic Republic of)" },
+                            { id: "EB2025-COM-003", title: "The impact of recycled carbon fibers on friction behaviour", presenter: "Arno Kerssemakers, Procotex Corporation SA, Belgium" },
+                            { id: "EB2025-COM-019", title: "Impact of Chemistry of Fiber-Free Titanates on Brake Pad Friction and Wear Properties", presenter: "Diego Chavez Jara, RIMSA METAL TECHNOLOGY S.L., Spain" },
+                        ]
+                    },
+                    { 
+                        chair: "Deaglán Ó Meachair, BrakeBetter",
+                        coChair: "Axel Stenkamp, KBAutosys",
+                        presentations: [
+                            { id: "EB2025-MDS-014", title: "Development of Driver Model for real-time simulation of brake control systems", presenter: "Dr. César Arzola, Technological Institute of Aragón (ITA), Spain" },
+                            { id: "EB2025-TSD-002", title: "NVH Requirements Management for Integrated Brake Control Systems", presenter: "Dr.-Ing. Torsten Treyde, ZF Group, Germany" },
+                            { id: "EB2025-MDS-012", title: "Regenerative braking control strategy for electric commercial bus under Indian road condition using artificial neural network", presenter: "Saurabh Saurabh, Tata Motors Ltd, India" },
+                            { id: "EB2025-CMV-005", title: "Navigating the Braking Paradigm Shift: Challenges and Opportunities in Commercial Vehicle Conversions from ICE to Fuel Cell EV", presenter: "Hector Garces, Applus Idiada, Spain" },
+                            { id: "EB2025-CMV-003", title: "CV Drum Brakes the Past – or the Future?", presenter: "Dirk Zumdohme, MEI Brakes Ltd, Germany" },
+                        ]
+                    }
+                ]
+            },
+            {
+                timeSlot: "5 June 2025 08:30-10:20 CET",
+                technicalSessions: [ 
+                    { 
+                        chair: "Sebastian Meier, Knorr-Bremse",
+                        coChair: "Klaus Jäckel, Daimler Truck A",
+                        presentations: [
+                            { id: "EB2025-EFA-001", title: "High-Efficiency Laser Cladding Solutions for Truck Brake Discs using sustainable diode lasers", presenter: "Dr.-Ing. Thomas Molitor, Laserline GmbH, Germany" },
+                            { id: "EB2025-EFA-004", title: "Investigation of brake wear particle emissions from heavy-duty vehicles", presenter: "Bassent Dridi, Lund University, Sweden" },
+                            { id: "EB2025-EFA-006", title: "At source brake dust active filtering system for HD applications - Field experimentation", presenter: "Dr.-Ing. Loïc Adamczak, Tallano, France" },
+                            { id: "EB2025-CMV-002", title: "Brake Emission for Heavy Duty Vehicles under EURO7 Legislation", presenter: "Maurizio Besana, Brembo N.V., Italy" },
+                            { id: "EB2025-CMV-006", title: "Mapping of heavy-duty brake frictions pairs - particle number concentration, size distribution and transition temperature", presenter: "Romain Couval, Scania CV AB, Sweden" },
+                        ]
+                    },
+                    { 
+                        chair: "Dr. Toni Feissel, IAV Gmb", 
+                        coChair: "Dipl.-Ing. Christof Danner, AVL List Gmb", 
+                        presentations: [
+                            { id: "EB2025-MDS-005", title: "CFD Simulation of BPE on a Drum Brake", presenter: "Shuhei Tanamachi, Nisshinbo Brake Inc., Japan" },
+                            { id: "EB2025-BSY-009", title: "Impact of temperature on tribolayer evolution and resulting particle emissions in brake pads", presenter: "Cecilia Gomiero, University of Torino, Italy" },
+                            { id: "EB2025-COM-022", title: "Cutting-Edge Solutions to Reduce PM10 Emissions: A Comparative Study of Advanced Coating and Reinforcement Technologies for Brake Discs.", presenter: "Dipl.-Ing. Patxi Rodriguez Vazquez, Fagor Ederlan Group (Edertek Tech centre), Spain" },
+                            { id: "EB2025-COM-015", title: "Navigating Euro 7: Continental's Perspective", presenter: "Cristina Loranca, Continental Automotive Technologies GmbH, Germany" },
+                            { id: "EB2025-EFA-019", title: "Innovative Laser Cladding Solutions for Sustainable Brake Disc Manufacturing", presenter: "Dr. Zhiwei Wu, ShangHai CaiShi Laser Technology.Co.,Ltd., China" },
+                        ]
+                    },
+                    { 
+                        chair: "Tomasz Grabiec, TMD Friction",
+                        coChair: "Ishmaeel Ghouri, Jaguar Land Rover",
+                        presentations: [
+                            { id: "EB2025-COM-004", title: "Niobium Alloyed Ferritic Nitrocarburized Brake Disc", presenter: "Mike Holly, CBMM, United States" },
+                            { id: "EB2025-COM-014", title: "A Good Control of the Microstructure as a Potential Tool to Improve Wear Behavior of Hypereutectic Grey Cast Iron", presenter: "Dr. Gorka Alonso, AZTERLAN (BRTA), Spain" },
+                            { id: "EB2025-COM-005", title: "Durable aluminium alloys for brake disc/rotor applications", presenter: "Dr. Amandine Duchaussoy, Constellium Technology Center (C-TEC), France" },
+                            { id: "EB2025-COM-023", title: "Early-Stage Assessment of Brake Disc Coatings for Euro 7 Compliance: A Mechanics-Based Approach", presenter: "Ing. Tomas Bourdieu, EDAG Engineering, Germany" },
+                            { id: "EB2025-COM-009", title: "Investigation into the Viability of a Full-Composite Brake Pad, Where the Convential Steel Backing Plate Is Replaced with a Polymer Composite Alternative.", presenter: "Luke Savage, Tribol braking Ltd, United Kingdom" },
+                        ]
+                    }
+                ]
+            },
+            {
+                timeSlot: "5 June 2025 13:30-15:20 CET",
+                technicalSessions: [ 
+                    { 
+                        chair: "Torsten Treyde, ZF Group",
+                        coChair: "", 
+                        presentations: [
+                            { id: "EB2025-TSD-015", title: "Evaluation of brake squeal propensity using a reduced-scale dynamometer: influence of system stiffness", presenter: "Dr. Domenico Antonio Rita, University of Trento, Italy" },
+                            { id: "EB2025-TSD-026", title: "Active Noise System: A Possibility to Quantify Squeal Robustness", presenter: "Dr. Benjamin Siegl, Continental Automotive Technologies GmbH, Germany" },
+                            { id: "EB2025-MDS-010", title: "Brake squeal model validation, a modern perspective applied to an industrial case.", presenter: "Dr.-Ing. Guillaume Vermot des Roches, SDTools, France" },
+                            { id: "EB2025-TSD-025", title: "Considerations on Damping Shim Adhesive Bleeding under EPB Loading", presenter: "Narcís Molina Montasell, Applus+ IDIADA, Spain" },
+                        ]
+                    },
+                    { 
+                        chair: "Dr. Andrew Smith, Alcon Components",
+                        coChair: "Harmut Niemann, Link Engineering",
+                        presentations: [
+                            { id: "EB2025-CMV-008", title: "Maximizing Quality, Cost Efficiency, and Output in the Production of EURO7-Compliant Brake Disks", presenter: "Dr.-Ing. Simon Storms, HPL Technologies GmbH, Germany" },
+                            { id: "EB2025-CMV-004", title: "Influence of Nitrogen and Argon on the Microstructure of 430L+TiC Coated Brake Discs Using High Speed Laser Cladding", presenter: "Piera Alvarez, Ikergune, INZU Group, Spain" },
+                            { id: "EB2025-EFA-012", title: "Development of Brake Retrofit Solutions for PCs and LCVs – the VERA Project", presenter: "Dr. Alessandro Mancini, Brembo NV, Italy" },
+                            { id: "EB2025-TSD-001", title: "Non contact thickness measurement of coatings on brake discs through laser phototthermal technology", presenter: "Geoffrey Bruno, Precitec Enovasense, France" },
+                            { id: "EB2025-COM-001", title: "Evaluation of the corrosion and brake performance of different coating systems after a combined dyno and corrosion cycle.", presenter: "Philipp Nyhof, TMD Friction Group GmbH, Germany" },
+                        ]
+                    },
+                    { 
+                        chair: "Belirtilmemiş", 
+                        coChair: "",
+                        presentations: [
+                            { id: "EB2025-TSD-022", title: "Real-time measurement of total and solid brake wear emissions: particle number, mass and size distribution (ELPI+ vs. HT-ELPI+)", presenter: "Dr. Anssi Arffman, Dekati Ltd. Finland" },
+                            { id: "EB2025-TSD-017", title: "Measurement and characterization of brake particle emissions of a passenger car in extended range of driving conditions", presenter: "Dr. Athanasios Dimaratos, Aristotle University of Thessaloniki, Greece" },
+                            { id: "EB2025-TSD-030", title: "Beyond PM10 emissions – VOCs, secondary particle formation and toxicology scoring of brake emissions", presenter: "Prof. Dr.-Ing. Ulf Olofsson, KTH Royal Institute of Technology, Sweden" },
+                            { id: "EB2025-TSD-018", title: "Researching brake wear emissions of light - and heavy duty vehicles, in order to support the development of a measurement protocol for brake particles in upcoming legislation.", presenter: "Ir. Quinn Vroom, TNO, Netherlands" },
+                            { id: "EB2025-CMV-001", title: "Direct Measurement of Brake Wear Particles Under Real-World Driving Conditions", presenter: "Tawfiq Al-Wasif Ruiz, CIEMAT, Spain" },
+                        ]
+                    }
+                ]
+            }
+        ];
+
+        let selections = {};
+
+        // Seçimleri Firebase'den yükle
+        async function loadSelections() {
+            try {
+                const selectionsRef = database.ref('selections');
+                selectionsRef.on('value', (snapshot) => {
+                    selections = snapshot.val() || {};
+                    renderSchedule();
+                });
+            } catch (error) {
+                console.error('Seçimler yüklenirken hata oluştu:', error);
+                saveNotification.textContent = 'Seçimler yüklenirken bir hata oluştu.';
+                saveNotification.style.display = 'block';
+                setTimeout(() => {
+                    saveNotification.style.display = 'none';
+                }, 5000);
+            }
+        }
+
+        // Seçimleri Firebase'e kaydet
+        async function saveSelectionsToServer() {
+            try {
+                await database.ref('selections').set(selections);
+                saveNotification.textContent = 'Seçimleriniz başarıyla kaydedildi.';
+                saveNotification.style.display = 'block';
+                setTimeout(() => {
+                    saveNotification.style.display = 'none';
+                }, 5000);
+            } catch (error) {
+                console.error('Seçimler kaydedilirken hata oluştu:', error);
+                saveNotification.textContent = 'Seçimler kaydedilirken bir hata oluştu.';
+                saveNotification.style.display = 'block';
+                setTimeout(() => {
+                    saveNotification.style.display = 'none';
+                }, 5000);
+            }
+        }
+
+        const scheduleContainer = document.getElementById('scheduleContainer');
+        const modal = document.getElementById('participantModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const modalPresentationInfo = document.getElementById('modalPresentationInfo');
+        const modalParticipantsContainer = document.getElementById('modalParticipants');
+        const saveButton = document.getElementById('saveButton');
+        const cancelButton = document.getElementById('cancelButton');
+        const summaryContent = document.getElementById('summaryContent');
+        const saveNotification = document.getElementById('saveNotification'); 
+
+        function getSessionTitle() {
+            sessionCounter++;
+            return `Oturum ${sessionCounter}`;
+        }
+
+        function renderSchedule() {
+            scheduleContainer.innerHTML = ''; 
+            sessionCounter = 0; 
+
+            conferenceData.forEach(timeSlotData => {
+                const timeSlotGroup = document.createElement('div');
+                timeSlotGroup.className = 'time-slot-group';
+
+                const timeSlotHeader = document.createElement('h2');
+                timeSlotHeader.className = 'text-2xl font-bold text-gray-700 mb-6';
+                timeSlotHeader.textContent = timeSlotData.timeSlot;
+                timeSlotGroup.appendChild(timeSlotHeader);
+
+                const sessionsGrid = document.createElement('div');
+                sessionsGrid.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6';
+
+                timeSlotData.technicalSessions.forEach(session => {
+                    const sessionColumn = document.createElement('div');
+                    sessionColumn.className = 'session-column';
+                    
+                    const currentSessionTitle = session.sessionTitle || getSessionTitle();
+
+                    let presentationsHTML = `<h3 class="text-xl font-semibold text-indigo-600 mb-3">${currentSessionTitle}</h3>
+                                             <p class="text-sm text-gray-500 mb-1">Başkan: ${session.chair}</p>
+                                             <p class="text-sm text-gray-500 mb-4">Eş Başkan: ${session.coChair || 'Yok'}</p>`;
+                    
+                    session.presentations.forEach(presentation => {
+                        const assignedParticipants = selections[presentation.id] || [];
+                        const cardSelectedClass = assignedParticipants.length > 0 ? 'selected-by-someone' : '';
+
+                        presentationsHTML += `
+                            <div class="presentation-card ${cardSelectedClass}" data-presentation-id="${presentation.id}" data-presentation-title="${presentation.title}">
+                                <h4 class="font-semibold text-gray-800">${presentation.id}</h4>
+                                <p class="text-sm text-gray-700">${presentation.title}</p>
+                                <p class="text-xs text-gray-500 mt-1">Sunan: ${presentation.presenter}</p>
+                                <div class="text-xs text-amber-700 mt-1 font-medium assigned-participants-list">
+                                    ${assignedParticipants.join(', ')}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    sessionColumn.innerHTML = presentationsHTML;
+                    sessionsGrid.appendChild(sessionColumn); 
+                });
+                timeSlotGroup.appendChild(sessionsGrid); 
+                scheduleContainer.appendChild(timeSlotGroup); 
+            });
+            addPresentationEventListeners();
+            updateSummary();
+        }
+
+        function addPresentationEventListeners() {
+            document.querySelectorAll('.presentation-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    currentEditingPresentationId = card.dataset.presentationId;
+                    const presentationTitle = card.dataset.presentationTitle;
+                    openModal(currentEditingPresentationId, presentationTitle);
+                });
+            });
+        }
+
+        function openModal(presentationId, presentationTitle) {
+            modalTitle.textContent = `Katılımcı Seç: ${presentationId}`;
+            modalPresentationInfo.textContent = presentationTitle;
+            modalParticipantsContainer.innerHTML = '';
+
+            const currentAssigned = selections[presentationId] || [];
+
+            participants.forEach(participant => {
+                const isChecked = currentAssigned.includes(participant);
+                modalParticipantsContainer.innerHTML += `
+                    <label class="flex items-center space-x-3 p-2 rounded-md hover:bg-gray-100 cursor-pointer">
+                        <input type="checkbox" value="${participant}" ${isChecked ? 'checked' : ''}
+                               class="form-checkbox h-5 w-5 text-indigo-600 rounded focus:ring-indigo-500">
+                        <span class="text-gray-700">${participant}</span>
+                    </label>
+                `;
+            });
+            modal.classList.remove('hidden');
+            setTimeout(() => { 
+                modal.classList.remove('opacity-0');
+                modal.querySelector('.modal-content').classList.remove('scale-95');
+            }, 10);
+        }
+
+        function closeModal() {
+            modal.classList.add('opacity-0');
+            modal.querySelector('.modal-content').classList.add('scale-95');
+            setTimeout(() => { 
+                 modal.classList.add('hidden');
+            }, 300);
+            currentEditingPresentationId = null;
+        }
+
+        saveButton.addEventListener('click', () => {
+            if (!currentEditingPresentationId) return;
+
+            const selectedParticipants = [];
+            modalParticipantsContainer.querySelectorAll('input[type="checkbox"]:checked').forEach(checkbox => {
+                selectedParticipants.push(checkbox.value);
+            });
+
+            if (selectedParticipants.length > 0) {
+                selections[currentEditingPresentationId] = selectedParticipants;
+            } else {
+                delete selections[currentEditingPresentationId]; 
+            }
+            
+            renderSchedule(); 
+            closeModal();
+        });
+
+        cancelButton.addEventListener('click', closeModal);
+        modal.addEventListener('click', (event) => {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+
+        function getSalonName(sessionIndex) {
+            if (sessionIndex === 0) return { name: "Salon A", class: "salon-a" };
+            if (sessionIndex === 1) return { name: "Salon B", class: "salon-b" };
+            if (sessionIndex === 2) return { name: "Salon C", class: "salon-c" };
+            return { name: "", class: "" }; // Fallback
+        }
+
+        function updateSummary() {
+            summaryContent.innerHTML = '';
+            let overallAnySelection = false;
+
+            participants.forEach(participantName => {
+                const participantDiv = document.createElement('div');
+                participantDiv.className = 'summary-participant-block';
+
+                const participantHeader = document.createElement('h4');
+                participantHeader.className = 'text-xl font-semibold text-indigo-600 mb-3';
+                participantHeader.textContent = `${participantName}'ın Katıldığı Sunumlar:`;
+                participantDiv.appendChild(participantHeader);
+
+                const attendedSessionsList = document.createElement('ul');
+                attendedSessionsList.className = 'space-y-2';
+
+                let sessionsForThisParticipant = [];
+
+                conferenceData.forEach((timeSlotEntry, timeSlotIdx) => {
+                    const timeSlotString = timeSlotEntry.timeSlot;
+                    timeSlotEntry.technicalSessions.forEach((session, sessionIdx) => {
+                        const salonInfo = getSalonName(sessionIdx);
+                        session.presentations.forEach((presentation, presentationIdxInSession) => { 
+                            const presentationId = presentation.id;
+                            if (selections[presentationId] && selections[presentationId].includes(participantName)) {
+                                sessionsForThisParticipant.push({
+                                    time: timeSlotString,
+                                    title: presentation.title,
+                                    id: presentation.id,
+                                    salon: salonInfo,
+                                    timeSlotOrder: timeSlotIdx,             
+                                    presentationOrderInSession: presentationIdxInSession, 
+                                    sessionOrderForTieBreak: sessionIdx     
+                                });
+                                overallAnySelection = true;
+                            }
+                        });
+                    });
+                });
+                
+                sessionsForThisParticipant.sort((a, b) => {
+                    if (a.timeSlotOrder !== b.timeSlotOrder) {
+                        return a.timeSlotOrder - b.timeSlotOrder; 
+                    }
+                    // Aynı zaman dilimi içinde, sunumun kendi oturumundaki (salonundaki) sırasına göre sırala
+                    if (a.presentationOrderInSession !== b.presentationOrderInSession) {
+                        return a.presentationOrderInSession - b.presentationOrderInSession; 
+                    }
+                    // Eğer kendi oturumlarındaki sıraları da aynıysa (bu normalde olmaz ama bir önlem), 
+                    // salon sırasına göre (A, B, C) eşitlik bozucu olarak kullan
+                    return a.sessionOrderForTieBreak - b.sessionOrderForTieBreak; 
+                });
+
+                if (sessionsForThisParticipant.length > 0) {
+                    sessionsForThisParticipant.forEach(item => {
+                        const listItem = document.createElement('li');
+                        listItem.className = 'text-sm';
+                        listItem.innerHTML = `
+                            <strong class="text-gray-700">${item.time}:</strong>
+                            <span class="text-gray-800">${item.title} (${item.id})</span>
+                            <span class="salon-badge ${item.salon.class}">${item.salon.name}</span>
+                        `;
+                        attendedSessionsList.appendChild(listItem);
+                    });
+                } else {
+                    const noSelectionText = document.createElement('p');
+                    noSelectionText.className = 'text-sm text-gray-500 italic ml-4';
+                    noSelectionText.textContent = 'Henüz bir sunuma atanmadı.';
+                    attendedSessionsList.appendChild(noSelectionText);
+                }
+                participantDiv.appendChild(attendedSessionsList);
+                summaryContent.appendChild(participantDiv);
+            });
+            
+            if (!overallAnySelection) {
+                 summaryContent.innerHTML = '<p class="text-gray-500">Henüz bir atama yapılmadı.</p>';
+            }
+        }
+        
+        const saveSelectionsButton = document.getElementById('saveSelectionsButton');
+        const exportPdfButton = document.getElementById('exportPdfButton');
+
+        saveSelectionsButton.addEventListener('click', () => {
+            saveSelectionsToServer();
+        });
+
+        exportPdfButton.addEventListener('click', () => {
+            const buttonsContainer = document.querySelector('.action-buttons-container');
+            const modalElement = document.getElementById('participantModal');
+            const notificationElement = document.getElementById('saveNotification');
+
+            const originalDisplayButtons = buttonsContainer.style.display;
+            const originalDisplayModal = modalElement.style.display;
+            const originalDisplayNotification = notificationElement.style.display;
+
+            buttonsContainer.style.display = 'none';
+            modalElement.style.display = 'none';
+            notificationElement.style.display = 'none';
+
+            window.print(); 
+
+            buttonsContainer.style.display = originalDisplayButtons;
+            modalElement.style.display = originalDisplayModal;
+            notificationElement.style.display = originalDisplayNotification;
+        });
+
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSelections();
+        });
+    </script>
+</body>
+</html>
